@@ -3,13 +3,10 @@
 // #include <WiFi.h>
 
 #include <LiquidCrystal_I2C.h>
-#include <MHZ.h>
+// #include <MHZ.h>
 #include "main.h"
 // #include "skWIFI.h"
 
-
-void skLCDprint(uint16_t co2concentration);
-void skLCDsetup(void);
 
 /***
  * Global State relations
@@ -23,16 +20,25 @@ int gHwState = 3;  // 0010: CO2 device run, 0001: LCD device run
 uint64_t chipid;  
 int retState = STATE_NONE;
 
-HardwareSerial Serial2(2);
+HardwareSerial SerialDevice(2);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+uint8_t cmd[9] = {0xFF,0x01,0x86,0x00,0x00,0x00,0x00,0x00,0x79};  // 0x86:Gas concentration
+uint8_t reset[9] = {0xFF,0x01,0x87,0x00,0x00,0x00,0x00,0x00,0x78}; // 0x87:Calibrate zero point
+uint8_t calOff[9] = {0xFF,0x01,0x79,0x00,0x00,0x00,0x00,0x00,0x86}; // auto cal off
+
+uint8_t res[9] = {};
+uint8_t idx = 0;
+bool flag = false;
+uint16_t co2=0;
 
 void setup()
 {
   // initialize serial ports
   Serial.begin(115200);
   while(!Serial);
-  Serial2.begin(9600);
-  while(!Serial2);
+  SerialDevice.begin(9600);
+  while(!SerialDevice);
 
   Serial.println("Serial begin");
 
@@ -51,14 +57,13 @@ void setup()
   }
 
   // skWIFIsetup();
-  delay(1000);
 
 }
 
 void loop()
 {
-
-
+  co2GetData();
+  delay(1000*60*1);
 
 }
 
@@ -91,4 +96,87 @@ void skLCDprint(uint16_t co2concentration)
   lcd.print("CO2: ");
   lcd.print(co2concentration);
   lcd.print("ppm");
+}
+
+void co2setup(void)
+{
+  delay(1000);
+  SerialDevice.write(calOff,9);
+  Serial.print("[Info] checksum: ");
+  Serial.printf("%02X\n",co2GetCheckSum(calOff));
+  while(SerialDevice.available()>0)
+  {
+    res[idx++]=SerialDevice.read();
+    flag=true;
+  }
+  idx = 0;
+  if(flag)
+  {
+    flag=false;
+    co2 = 0;
+    co2 += (uint16_t)res[2] <<8;
+    co2 += res[3];
+    Serial.print("[Info] checksum: ");
+    Serial.printf("%02X\n",co2GetCheckSum(res));
+  }
+  // Serial.println(co2);
+  skLCDprint(co2);
+
+  delay(1000*4);
+  SerialDevice.write(cmd,9);
+  Serial.print("[Info] checksum: ");
+  Serial.printf("%02X\n",co2GetCheckSum(cmd));
+  while(SerialDevice.available()>0)
+  {
+    res[idx++]=SerialDevice.read();
+    flag=true;
+  }
+  idx = 0;
+  if(flag)
+  {
+    flag=false;
+    co2 = 0;
+    co2 += (uint16_t)res[2] <<8;
+    co2 += res[3];
+    Serial.print("[Info] checksum: ");
+    Serial.printf("%02X\n",co2GetCheckSum(res));
+  }
+  // Serial.println(co2);
+  skLCDprint(co2);
+
+  delay(1000*5);
+}
+
+void co2GetData(void)
+{
+  SerialDevice.write(cmd,9);
+  while(SerialDevice.available()>0)
+  {
+    res[idx++]=SerialDevice.read();
+    flag=true;
+  }
+  idx = 0;
+  if(flag)
+  {
+    flag=false;
+    co2 = 0;
+    co2 += (uint16_t)res[2] <<8;
+    co2 += res[3];
+    // Serial.print("[Info] checksum: ");
+    // Serial.printf("%02X\n",co2GetCheckSum(res));
+  }
+  Serial.println(co2);
+  skLCDprint(co2);
+}
+
+uint8_t co2GetCheckSum(uint8_t *p_packet)
+{
+  uint8_t i, checksum = 0;
+  for(i=1; i<8; i++)
+  {
+    checksum += p_packet[i];
+  }
+  checksum = 0xff - checksum;
+  checksum += 1;
+  return checksum;
 }

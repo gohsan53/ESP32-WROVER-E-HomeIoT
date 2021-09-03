@@ -45,5 +45,13 @@
 
 void changeState(int retState);
 
+void skLCDsetup(void);
+void skLCDprint(uint16_t co2concentration);
+
+void co2setup(void);
+void co2GetData(void);
+uint8_t co2GetCheckSum(uint8_t *p_packet);
+
+
 #endif // _MAIN_H
 
