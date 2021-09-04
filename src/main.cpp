@@ -1,12 +1,7 @@
 #include <Arduino.h>
-// #include <wire.h>
-// #include <WiFi.h>
-
 #include <LiquidCrystal_I2C.h>
-// #include <MHZ.h>
+#include <Adafruit_BME280.h>
 #include "main.h"
-// #include "skWIFI.h"
-
 
 /***
  * Global State relations
@@ -22,6 +17,7 @@ int retState = STATE_NONE;
 
 HardwareSerial SerialDevice(2);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+Adafruit_BME280 bme;
 
 uint8_t cmd[9] = {0xFF,0x01,0x86,0x00,0x00,0x00,0x00,0x00,0x79};  // 0x86:Gas concentration
 uint8_t reset[9] = {0xFF,0x01,0x87,0x00,0x00,0x00,0x00,0x00,0x78}; // 0x87:Calibrate zero point
@@ -31,6 +27,10 @@ uint8_t res[9] = {};
 uint8_t idx = 0;
 bool flag = false;
 uint16_t co2=0;
+
+float temp;
+float humid;
+float pressure;
 
 void setup()
 {
@@ -51,6 +51,7 @@ void setup()
   */
   if (gHwState == 3) {
     skLCDsetup();
+    while(!bme.begin(0x76));
     co2setup();
     gState = STATE_CO2;
     gCo2Millis = 0;
@@ -98,6 +99,34 @@ void skLCDprint(uint16_t co2concentration)
   lcd.print("ppm");
 }
 
+void skLCDprintNull(void)
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("CO2: ");
+  lcd.print("----");
+  lcd.print("ppm");
+  lcd.setCursor(0, 1);
+  lcd.print("--.--");
+  lcd.print("C ");
+  lcd.print("--.--");
+  lcd.print("%");
+}
+
+void skLCDprintAll(uint16_t co2concentration, float temp, float humid)
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("CO2: ");
+  lcd.print(co2concentration);
+  lcd.print("ppm");
+  lcd.setCursor(0, 1);
+  lcd.print(temp);
+  lcd.print("C ");
+  lcd.print(humid);
+  lcd.print("%");
+}
+
 void co2setup(void)
 {
   delay(1000);
@@ -119,10 +148,11 @@ void co2setup(void)
     Serial.print("[Info] checksum: ");
     Serial.printf("%02X\n",co2GetCheckSum(res));
   }
-  // Serial.println(co2);
-  skLCDprint(co2);
+  Serial.println(co2);
+  // skLCDprint(co2);
+  skLCDprintNull();
 
-  delay(1000*4);
+  delay(1000);
   SerialDevice.write(cmd,9);
   Serial.print("[Info] checksum: ");
   Serial.printf("%02X\n",co2GetCheckSum(cmd));
@@ -141,10 +171,10 @@ void co2setup(void)
     Serial.print("[Info] checksum: ");
     Serial.printf("%02X\n",co2GetCheckSum(res));
   }
-  // Serial.println(co2);
-  skLCDprint(co2);
+  Serial.println(co2);
+  // skLCDprint(co2);
 
-  delay(1000*5);
+  delay(1000*60*1);
 }
 
 void co2GetData(void)
@@ -165,8 +195,24 @@ void co2GetData(void)
     // Serial.print("[Info] checksum: ");
     // Serial.printf("%02X\n",co2GetCheckSum(res));
   }
+  Serial.print("CO2  :");
   Serial.println(co2);
-  skLCDprint(co2);
+
+  temp=bme.readTemperature();
+  pressure=bme.readPressure() / 100.0F;
+  humid=bme.readHumidity();
+  Serial.print("温度 :");
+  Serial.print(temp);
+  Serial.println(" °C");
+  Serial.print("気圧 :");
+  Serial.print(pressure);
+  Serial.println(" hPa");
+  Serial.print("湿度 :");
+  Serial.print(humid);
+  Serial.println(" %");
+  Serial.println();
+  delay(1000);
+  skLCDprintAll(co2, temp, humid);
 }
 
 uint8_t co2GetCheckSum(uint8_t *p_packet)

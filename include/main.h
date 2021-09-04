@@ -47,6 +47,8 @@ void changeState(int retState);
 
 void skLCDsetup(void);
 void skLCDprint(uint16_t co2concentration);
+void skLCDprintNull(void);
+void skLCDprintAll(uint16_t co2concentration, float temp, float humid);
 
 void co2setup(void);
 void co2GetData(void);
