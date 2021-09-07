@@ -35,6 +35,8 @@
 #ifndef _MAIN_H
 #define _MAIN_H
 
+#include "secrets.h"
+
 /***
  * Global State define
 ***/
@@ -54,6 +56,7 @@ void co2setup(void);
 void co2GetData(void);
 uint8_t co2GetCheckSum(uint8_t *p_packet);
 
+void getTime(void);
 
 #endif // _MAIN_H
 

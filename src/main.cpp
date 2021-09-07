@@ -1,7 +1,12 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_BME280.h>
+#include <Ambient.h>
+#include <time.h>
 #include "main.h"
+
+#define JST 60*60*9
 
 /***
  * Global State relations
@@ -18,6 +23,8 @@ int retState = STATE_NONE;
 HardwareSerial SerialDevice(2);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 Adafruit_BME280 bme;
+WiFiClient client;
+Ambient ambient;
 
 uint8_t cmd[9] = {0xFF,0x01,0x86,0x00,0x00,0x00,0x00,0x00,0x79};  // 0x86:Gas concentration
 uint8_t reset[9] = {0xFF,0x01,0x87,0x00,0x00,0x00,0x00,0x00,0x78}; // 0x87:Calibrate zero point
@@ -50,6 +57,7 @@ void setup()
   With external devices 
   */
   if (gHwState == 3) {
+    delay(500);
     skLCDsetup();
     while(!bme.begin(0x76));
     co2setup();
@@ -57,15 +65,30 @@ void setup()
     gCo2Millis = 0;
   }
 
-  // skWIFIsetup();
-
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while(WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("[INFO] WiFi connected.\r\n[INFO] IP address: ");
+  Serial.println(WiFi.localIP());
+  configTime(JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
+  ambient.begin(CHANNEL_ID, WRITE_KEY, &client);
+  getTime();
+  delay(1000*60*3);
 }
 
 void loop()
 {
+  static uint8_t cnt = 60;
+  if (cnt >= 60) {
+    cnt = 0;
+    getTime();
+  }
   co2GetData();
   delay(1000*60*1);
-
+  cnt++;
 }
 
 /**
@@ -87,7 +110,6 @@ void skLCDsetup(void)
   lcd.backlight();
   lcd.setCursor(0, 0);
   lcd.print("Hello world!");
-  delay(1000);
 }
 
 void skLCDprint(uint16_t co2concentration)
@@ -129,7 +151,6 @@ void skLCDprintAll(uint16_t co2concentration, float temp, float humid)
 
 void co2setup(void)
 {
-  delay(1000);
   SerialDevice.write(calOff,9);
   Serial.print("[Info] checksum: ");
   Serial.printf("%02X\n",co2GetCheckSum(calOff));
@@ -152,7 +173,8 @@ void co2setup(void)
   // skLCDprint(co2);
   skLCDprintNull();
 
-  delay(1000);
+  delay(500);
+
   SerialDevice.write(cmd,9);
   Serial.print("[Info] checksum: ");
   Serial.printf("%02X\n",co2GetCheckSum(cmd));
@@ -173,8 +195,6 @@ void co2setup(void)
   }
   Serial.println(co2);
   // skLCDprint(co2);
-
-  delay(1000*60*1);
 }
 
 void co2GetData(void)
@@ -199,8 +219,13 @@ void co2GetData(void)
   Serial.println(co2);
 
   temp=bme.readTemperature();
-  pressure=bme.readPressure() / 100.0F;
   humid=bme.readHumidity();
+  pressure=bme.readPressure() / 100.0F;
+  ambient.set(1, co2);
+  ambient.set(2, temp);
+  ambient.set(3, humid);
+  ambient.set(4, pressure);
+  ambient.send();
   Serial.print("温度 :");
   Serial.print(temp);
   Serial.println(" °C");
@@ -211,7 +236,6 @@ void co2GetData(void)
   Serial.print(humid);
   Serial.println(" %");
   Serial.println();
-  delay(1000);
   skLCDprintAll(co2, temp, humid);
 }
 
@@ -225,4 +249,22 @@ uint8_t co2GetCheckSum(uint8_t *p_packet)
   checksum = 0xff - checksum;
   checksum += 1;
   return checksum;
+}
+
+void getTime(void)
+{
+  time_t t;
+  struct tm *tm;
+  static const char *wd[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+  t = time(NULL);
+  tm = localtime(&t);
+  Serial.printf(" %04d/%02d/%02d(%s) %02d:%02d:%02d\n",
+    tm->tm_year+1900,
+    tm->tm_mon+1,
+    tm->tm_mday,
+    wd[tm->tm_wday],
+    tm->tm_hour,
+    tm->tm_min,
+    tm->tm_sec);
 }
