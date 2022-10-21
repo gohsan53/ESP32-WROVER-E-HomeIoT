@@ -35,10 +35,6 @@ uint8_t idx = 0;
 bool flag = false;
 uint16_t co2=0;
 
-float temp;
-float humid;
-float pressure;
-
 void setup()
 {
   // initialize serial ports
@@ -76,12 +72,11 @@ void setup()
   configTime(JST, 0, "ntp.nict.jp", "ntp.jst.mfeed.ad.jp");
   ambient.begin(CHANNEL_ID, WRITE_KEY, &client);
   getTime();
-  delay(1000*60*3);
 }
 
 void loop()
 {
-  static uint8_t cnt = 60;
+  static uint8_t cnt = 0;
   if (cnt >= 60) {
     cnt = 0;
     getTime();
@@ -112,39 +107,45 @@ void skLCDsetup(void)
   lcd.print("Hello world!");
 }
 
-void skLCDprint(uint16_t co2concentration)
-{
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("CO2: ");
-  lcd.print(co2concentration);
-  lcd.print("ppm");
-}
+// void skLCDprint(uint16_t co2concentration)
+// {
+//   lcd.clear();
+//   lcd.setCursor(0, 0);
+//   // lcd.print("CO2: ");
+//   lcd.print(co2concentration);
+//   lcd.print("ppm");
+// }
 
 void skLCDprintNull(void)
 {
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("CO2: ");
+  lcd.setCursor(2, 0);
+  // lcd.print("CO2: ");
   lcd.print("----");
-  lcd.print("ppm");
-  lcd.setCursor(0, 1);
+  lcd.print("ppm ");
   lcd.print("--.--");
-  lcd.print("C ");
+  lcd.print("G ");
+  lcd.setCursor(1, 1);
+  lcd.print("--.--");
+  lcd.print("C   ");
   lcd.print("--.--");
   lcd.print("%");
 }
 
-void skLCDprintAll(uint16_t co2concentration, float temp, float humid)
+void skLCDprintAll(uint16_t co2concentration, float temp, float humid, float aHumid)
 {
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("CO2: ");
+  lcd.setCursor(2, 0);
+  // lcd.print("CO2: ");
+  if(co2concentration < 1000) lcd.print(" ");
   lcd.print(co2concentration);
-  lcd.print("ppm");
-  lcd.setCursor(0, 1);
+  lcd.print("ppm ");
+  if(aHumid < 10) lcd.print(" ");
+  lcd.print(aHumid);
+  lcd.print("G ");
+  lcd.setCursor(1, 1);
   lcd.print(temp);
-  lcd.print("C ");
+  lcd.print("C   ");
   lcd.print(humid);
   lcd.print("%");
 }
@@ -199,6 +200,10 @@ void co2setup(void)
 
 void co2GetData(int cnt)
 {
+  float temp = 0.0;
+  float humid = 0.0;
+  float pressure = 0.0;
+
   SerialDevice.write(cmd,9);
   while(SerialDevice.available()>0)
   {
@@ -215,30 +220,39 @@ void co2GetData(int cnt)
     // Serial.print("[Info] checksum: ");
     // Serial.printf("%02X\n",co2GetCheckSum(res));
   }
-  Serial.print("CO2  :");
-  Serial.println(co2);
+  Serial.print("　　 CO2 :");
+  Serial.print(co2);
+  Serial.println(" ppm");
 
   temp=bme.readTemperature();
   humid=bme.readHumidity();
   pressure=bme.readPressure() / 100.0F;
-  if (cnt%5 == 0) {
+
+  if (cnt != 0 && cnt%5 == 0) {
     ambient.set(1, co2);
     ambient.set(2, temp);
     ambient.set(3, humid);
     ambient.set(4, pressure);
     ambient.send();
+    Serial.print("\r\n[ambient] data is sent\r\n\r\n");
   }
-  Serial.print("温度 :");
+
+  float aHumid = calcAbsoluteHumidity(temp, humid);
+
+  Serial.print("　　温度 :");
   Serial.print(temp);
   Serial.println(" °C");
-  Serial.print("気圧 :");
+  Serial.print("　　気圧 :");
   Serial.print(pressure);
   Serial.println(" hPa");
-  Serial.print("湿度 :");
+  Serial.print("　　湿度 :");
   Serial.print(humid);
   Serial.println(" %");
+  Serial.print("絶対湿度 :");
+  Serial.print(aHumid);
+  Serial.print(" g");
   Serial.println();
-  skLCDprintAll(co2, temp, humid);
+  skLCDprintAll(co2, temp, humid, aHumid);
 }
 
 uint8_t co2GetCheckSum(uint8_t *p_packet)
@@ -269,4 +283,18 @@ void getTime(void)
     tm->tm_hour,
     tm->tm_min,
     tm->tm_sec);
+}
+
+float calcAbsoluteHumidity(float temp, float humid) {
+  
+  // saturation water vapor pressure
+  float swvp = 6.1078 * exp(log(10)*((7.5*temp)/(237.3+temp)));
+
+  // saturation water vapor density
+  float swvd = (217*swvp)/(temp+273.15);
+  
+  // absolute humidity
+  float ah = swvd * humid/100;
+  
+  return ah;
 }
