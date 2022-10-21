@@ -86,7 +86,7 @@ void loop()
     cnt = 0;
     getTime();
   }
-  co2GetData();
+  co2GetData(cnt);
   delay(1000*60*1);
   cnt++;
 }
@@ -197,7 +197,7 @@ void co2setup(void)
   // skLCDprint(co2);
 }
 
-void co2GetData(void)
+void co2GetData(int cnt)
 {
   SerialDevice.write(cmd,9);
   while(SerialDevice.available()>0)
@@ -221,11 +221,13 @@ void co2GetData(void)
   temp=bme.readTemperature();
   humid=bme.readHumidity();
   pressure=bme.readPressure() / 100.0F;
-  ambient.set(1, co2);
-  ambient.set(2, temp);
-  ambient.set(3, humid);
-  ambient.set(4, pressure);
-  ambient.send();
+  if (cnt%5 == 0) {
+    ambient.set(1, co2);
+    ambient.set(2, temp);
+    ambient.set(3, humid);
+    ambient.set(4, pressure);
+    ambient.send();
+  }
   Serial.print("温度 :");
   Serial.print(temp);
   Serial.println(" °C");
