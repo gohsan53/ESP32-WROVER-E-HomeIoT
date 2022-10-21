@@ -58,5 +58,7 @@ uint8_t co2GetCheckSum(uint8_t *p_packet);
 
 void getTime(void);
 
+float calcAbsoluteHumidity(float temp, float humid);
+
 #endif // _MAIN_H
 
